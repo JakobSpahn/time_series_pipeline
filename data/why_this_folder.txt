@@ -1,0 +1,1 @@
+Place data here. You should place the folders '/example/' and '/real/' here, so that this folder contains two subfolders.
