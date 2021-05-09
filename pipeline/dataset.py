@@ -3,16 +3,25 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from dateutil import parser
 
+from .utils import get_header
+
 from datetime import datetime, timedelta
 
 class Dataset:
     def __init__(self, location):
-        self.df = pd.read_csv(location, header=2) #This needs to be smarter (header=2 is not general enough)
-        
+
+        header, unit = get_header(location)
+        self.df = pd.read_csv(location, header=header) #This needs to be smarter (header=2 is not general enough)
+
+        self.units = None
         self.time_format = None
         self.sampling_rate = None
         self.average = None
         self.std_dev = None
+
+        if(unit):
+            self.units = self.df.iloc[0].values
+            self.df = self.df.iloc[1:]
 
     def infer_format(self): #ToDo: Functionality to differentiate between US and EU format.
         #Get first and last (correct) timestamp
