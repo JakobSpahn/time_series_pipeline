@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 class Dataset:
     def __init__(self, location):
 
-        header, unit = get_header(location)
+        header, unit = get_header(location) #Get row number of header. If detected, also row number of unit row
         self.df = pd.read_csv(location, header=header) #This needs to be smarter (header=2 is not general enough)
 
         self.units = None
@@ -75,26 +75,26 @@ class Dataset:
         self.df.reset_index(drop=True, inplace=True)
         
         #Name of first column (supposed to be time column)
-        name_time = self.df.columns[0]
+        self.name_time = self.df.columns[0]
         
         #Get List of all duplicated indices
-        df_i_dup = self.df[self.df.duplicated(subset=[name_time],keep=False)]
-        unique_dup = df_i_dup[name_time].unique() #[11:01:00, 0x0, 0x1]
+        df_i_dup = self.df[self.df.duplicated(subset=[self.name_time],keep=False)]
+        unique_dup = df_i_dup[self.name_time].unique() #[11:01:00, 0x0, 0x1]
         print(unique_dup)
 
         for idx,i in enumerate(unique_dup):
             print('Changing duplicate timestamp {0}'.format(i))
             
-            tmp_df_i_dup = df_i_dup.loc[df_i_dup[name_time] == unique_dup[idx]] #Get list of specific duplicated indices
+            tmp_df_i_dup = df_i_dup.loc[df_i_dup[self.name_time] == unique_dup[idx]] #Get list of specific duplicated indices
             
             n = len(tmp_df_i_dup)    
             
-            dup_index = tmp_df_i_dup[~tmp_df_i_dup.duplicated(subset=[name_time],keep='first')].index[0]
+            dup_index = tmp_df_i_dup[~tmp_df_i_dup.duplicated(subset=[self.name_time],keep='first')].index[0]
 
-            after = self.df.iloc[dup_index+n]['TIMESTAMP']
+            after = self.df.iloc[dup_index+n][self.name_time]
             after = parser.parse(after)
 
-            before = self.df.iloc[dup_index-1]['TIMESTAMP']
+            before = self.df.iloc[dup_index-1][self.name_time]
             before = parser.parse(before)
             
             #Get diff between next actual timestep and first duplicate timestep
@@ -112,6 +112,55 @@ class Dataset:
                 #print(df.iloc[dup_index+y,0])
         
         #return self.df
+    
+    def time_as_index(self):
+        if(not isinstance(self.df.index, pd.DatetimeIndex)):
+            self.df[self.name_time] = pd.to_datetime(self.df[self.name_time])
+            self.df = self.df.set_index(self.name_time)
+            return True
+        else:
+            print('Index already datetime')
+            return True
+        
+        return False #Maybe not needed
+
+    def median_sampling_rate(self):
+        median = None
+        if(self.time_as_index()):
+            values = self.df.index.to_series().diff()
+            print(values.value_counts())
+            median = values.median()
+            print('Median: {0}'.format(median))
+        
+        return median
+
+    def resample(self):
+        #Prepare dummy dataframe with equidistant sampling rate
+        freq = self.median_sampling_rate()
+        cols = self.df.columns
+        start = self.df.index.to_series().iloc[0]
+        end = self.df.index.to_series().iloc[-1]
+
+        index_dummy = pd.date_range(start=start, end=end, freq=freq)
+        df_dummy = pd.DataFrame(index=index_dummy, columns=cols)
+
+        #Concat dummy with df and drop duplicates
+        self.df = pd.concat([self.df, df_dummy])
+        self.df = self.df[~self.df.index.duplicated(keep='first')]
+        self.df = self.df.sort_index()
+
+        #Log amount of rows added for resampling
+        df_tmp = pd.concat([self.df,self.df.dropna(how='all')])
+        df_tmp = df_tmp[~df_tmp.index.duplicated(keep=False)]
+        print('{0} rows were added due to resampling'.format(len(df_tmp)))
+        
+    
+    def interpolate(self):
+        #Add limit
+        self.df = self.df.interpolate(method='time').ffill().bfill()
+        na_rows = len(self.df[self.df.isnull().any(axis=1)])
+        print('After interpolation {0} rows contain nan values'.format(na_rows))
+
 
     def to_csv(self, location, index=False):
         self.df.to_csv(location,index=index)
