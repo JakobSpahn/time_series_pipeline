@@ -6,6 +6,7 @@ from dateutil import parser
 from .utils import get_header
 
 from datetime import datetime, timedelta
+from math import isnan
 
 class Dataset:
     def __init__(self, location):
@@ -13,17 +14,24 @@ class Dataset:
         header, unit = get_header(location) #Get row number of header. If detected, also row number of unit row
         self.df = pd.read_csv(location, header=header) #This needs to be smarter (header=2 is not general enough)
 
-        self.units = None
+        self.units = {}
         self.time_format = None
         self.sampling_rate = None
         self.average = None
         self.std_dev = None
 
         if(unit):
-            self.units = self.df.iloc[0].values
+            tmp = self.df.iloc[0].values
             self.df = self.df.iloc[1:]
+            if(len(tmp)==len(self.df.columns)):
+                for i in range(len(tmp)):
+                    self.units[self.df.columns[i]] = tmp[i]
+
 
     def infer_format(self): #ToDo: Functionality to differentiate between US and EU format.
+        #Name of first column (supposed to be time column)
+        self.name_time = self.df.columns[0]
+        
         #Get first and last (correct) timestamp
         first_stamp = parser.parse(self.df.iloc[0,0])
         last_stamp = parser.parse(self.df.iloc[-1,0])
@@ -42,10 +50,11 @@ class Dataset:
     def apply_format(self):
         next_idx = 0
         group = 0
+
+        arr = self.df[self.name_time].to_numpy()
         
-        #Can we speed this up? --> use numpy vectorization
-        for i in range(len(self.df)):
-            val = self.df.iloc[i,0]
+        for i in range(len(arr)):
+            val = arr[i]
             
             try:
                 val = parser.parse(val)
@@ -64,8 +73,9 @@ class Dataset:
                 #print("Wrong val: {0}; Replaced with {1}".format(val, hex(group)))
                 val = hex(group)
                 
-            self.df.iloc[i,0] = val
-            
+            arr[i] = val
+
+        self.df[self.name_time]=arr            
         #return self.df
 
     def clean_stamps(self):
@@ -74,8 +84,7 @@ class Dataset:
         self.df = self.df.drop_duplicates()
         self.df.reset_index(drop=True, inplace=True)
         
-        #Name of first column (supposed to be time column)
-        self.name_time = self.df.columns[0]
+        
         
         #Get List of all duplicated indices
         df_i_dup = self.df[self.df.duplicated(subset=[self.name_time],keep=False)]
@@ -117,6 +126,7 @@ class Dataset:
         if(not isinstance(self.df.index, pd.DatetimeIndex)):
             self.df[self.name_time] = pd.to_datetime(self.df[self.name_time])
             self.df = self.df.set_index(self.name_time)
+            del self.units[self.name_time]
             return True
         else:
             print('Index already datetime')
@@ -153,10 +163,16 @@ class Dataset:
         df_tmp = pd.concat([self.df,self.df.dropna(how='all')])
         df_tmp = df_tmp[~df_tmp.index.duplicated(keep=False)]
         print('{0} rows were added due to resampling'.format(len(df_tmp)))
-        
+
+    def convert_na(self):
+        cols = self.df.columns
+        for i in range(len(cols)):
+            if(self.df.dtypes[i]=='object'):
+                self.df[cols[i]] = pd.to_numeric(self.df[cols[i]], errors='coerce')
+                print('Converted column: \'{0}\' to numeric'.format(cols[i]))
     
     def interpolate(self):
-        #Add limit
+        #ToDo: Add limit
         self.df = self.df.interpolate(method='time').ffill().bfill()
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('After interpolation {0} rows contain nan values'.format(na_rows))
@@ -177,6 +193,7 @@ class Dataset:
         
         for i in range(len(redundant)):
             self.df.drop(columns = redundant[i], inplace=True)
+            del self.units[redundant[i]]
             print('Column: \'{0}\' was dropped'.format(redundant[i]))
         
 
