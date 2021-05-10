@@ -161,6 +161,24 @@ class Dataset:
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('After interpolation {0} rows contain nan values'.format(na_rows))
 
+    def drop_dup_cols(self):
+        redundant = []
+        for i in range(len(self.df.columns)-1):
+            col = self.df.columns[i]
+            arr = self.df[col].to_numpy()
+        
+            for y in range(i+1, len(self.df.columns)):
+                col2 = self.df.columns[y]
+                arr2 = self.df[col2].to_numpy()
+                
+                if(np.array_equal(arr, arr2)):
+                    print('{0} {1} are equal'.format(col, col2))
+                    redundant.append(col2)
+        
+        for i in range(len(redundant)):
+            self.df.drop(columns = redundant[i], inplace=True)
+            print('Column: \'{0}\' was dropped'.format(redundant[i]))
+        
 
     def to_csv(self, location, index=False):
         self.df.to_csv(location,index=index)
