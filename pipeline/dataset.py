@@ -23,6 +23,7 @@ class Dataset:
         self.std_dev = None
         self.outliers = {}
         self.outliers_flagged = {}
+        self.unit_flags = {}
 
         if(unit):
             tmp = self.df.iloc[0].values
@@ -31,7 +32,39 @@ class Dataset:
                 for i in range(len(tmp)):
                     self.units[self.df.columns[i]] = tmp[i]
 
-
+    def scan_columns(self):
+        columns = self.df.columns
+        for i in range(len(columns)):
+            name = columns[i]
+            if('quality' in name):
+                rows = self.df[name].to_numpy()
+                if(i != 0):
+                    related_col = columns[i-1]
+                    print('Found column \'{0}\' which belongs to \'{1}\' and indicates missing values'.format(name, related_col))
+                    flags = self.df[name].to_numpy()
+                    counter = 0
+                    for i in range(len(flags)):
+                        try:
+                            isnan(flags[i])
+                        except TypeError:
+                            self.df[related_col].iloc[i] = float('NaN')
+                            counter += 1
+                    print('Column: \'{0}\': {1} values have been replaced with nan'.format(related_col, counter))
+                    self.df.drop(columns = name, inplace=True)
+                    print('Dropped column \'{0}\''.format(name))
+                else:
+                    continue
+            elif('unit' in name):
+                rows = self.df[name].to_numpy()
+                if(i!=0):
+                    related_col = columns[i-1]
+                    print('Found column \'{0}\' which belongs to \'{1}\' and indicates the corrsesponding unit'.format(name, related_col))
+                    self.unit_flags[related_col] = self.df[name]
+                    self.df.drop(columns = name, inplace=True)
+                    print('Dropped column \'{0}\' and saved for later'.format(name))
+                else:
+                    continue
+            
     def infer_format(self): #ToDo: Functionality to differentiate between US and EU format.
         #Name of first column (supposed to be time column)
         self.name_time = self.df.columns[0]
@@ -46,7 +79,7 @@ class Dataset:
         time_format = base_format
 
         if(diff.days >= 1):
-            time_format =  '%Y-%m-%D ' + base_format
+            time_format =  '%Y-%m-%d ' + base_format
 
         self.time_format = time_format
         return time_format
@@ -128,9 +161,12 @@ class Dataset:
     
     def time_as_index(self):
         if(not isinstance(self.df.index, pd.DatetimeIndex)):
-            self.df[self.name_time] = pd.to_datetime(self.df[self.name_time])
+            self.df[self.name_time] = pd.to_datetime(self.df[self.name_time], infer_datetime_format=True)
             self.df = self.df.set_index(self.name_time)
-            del self.units[self.name_time]
+            try:
+                del self.units[self.name_time]
+            except KeyError:
+                pass
             return True
         else:
             print('Index already datetime')
@@ -220,7 +256,7 @@ class Dataset:
         #Only caculate outliers if not already available
         outliers_mahal, md = mahalanobis_method(df=df)
         groups = group_outliers(outliers_mahal)
-        groups = extend_outliers(groups)
+        #groups = extend_outliers(groups)
         self.outliers[name] = groups
 
         ax = col.plot()
@@ -247,6 +283,7 @@ class Dataset:
         
         outliers = zscore_method(col)
         groups = group_outliers(outliers)
+        self.outliers[name] = groups
 
         ax = col.plot()
         ax = visualize_outliers(col, ax, groups, color='green')
@@ -265,12 +302,12 @@ class Dataset:
         if(pot_err_grps):
             ax = visualize_outliers(col, ax, pot_err_grps, color='red')
 
-    def clean_flagged_outliers(self, col, manual = []):
+    def clean_flagged_outliers(self, col, mode='auto', manual = []):
         col, name = self.__check_col(col)
         if(not name):
             return
     
-        if(manual and isinstance(manual, list)):
+        if(mode=='man' and manual and isinstance(manual, list)):
             print('Cleaning the manually flagged outliers: {0}'.format(manual))
             flagged_groups = []
             try:
@@ -282,14 +319,21 @@ class Dataset:
             for i in manual:
                 flagged_groups.append(group[i])           
 
-        elif(not manual):
+        elif(mode=='auto'):
             try:
                 flagged_groups = self.outliers_flagged[name]
                 print('Cleaning the automatically flagged outliers')
             except KeyError:
                 print('Column does not have any outliers atomatically flagged. Consider running {0} first'.format(self.show_multivariate_outliers))
                 return
+        elif(mode=='all'):
+            try:
+                flagged_groups = self.outliers[name]
+            except KeyError:
+                print('No outliers known for this column. Consider running {0} first'.format(self.show_multivariate_outliers))
+                return
 
+        print('Cleaning {0} outliers'.format(len(flagged_groups)))
         for i in range(len(flagged_groups)):
             group = flagged_groups[i]
             for n in range(len(group)):
@@ -315,9 +359,5 @@ class Dataset:
             return False, False
         return col, name
 
-
-
-
     def to_csv(self, location, index=False):
         self.df.to_csv(location,index=index)
-

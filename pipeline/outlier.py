@@ -88,8 +88,9 @@ def group_outliers(out):
             comp = out[i]+1
         else:
             cons.append(curr)
-            curr = []
+            curr = [out[i]]
             comp = out[i]+1
+            
     if(curr):
         cons.append(curr)
 
