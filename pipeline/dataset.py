@@ -175,11 +175,11 @@ class Dataset:
                 self.df[cols[i]] = pd.to_numeric(self.df[cols[i]], errors='coerce')
                 print('Converted column: \'{0}\' to numeric'.format(cols[i]))
     
-    def interpolate(self):
+    def interpolate(self, method='time'):
         #ToDo: Add limit
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('Befor interpolation {0} rows contain nan values'.format(na_rows))
-        self.df = self.df.interpolate(method='time').ffill().bfill()
+        self.df = self.df.interpolate(method=method).ffill().bfill()
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('After interpolation {0} rows contain nan values'.format(na_rows))
 
@@ -217,8 +217,10 @@ class Dataset:
         lst.extend(corr)
         df = self.df[lst] #Get Dataframe with only this column and the correlating columns
         
+        #Only caculate outliers if not already available
         outliers_mahal, md = mahalanobis_method(df=df)
         groups = group_outliers(outliers_mahal)
+        groups = extend_outliers(groups)
         self.outliers[name] = groups
 
         ax = col.plot()
@@ -235,7 +237,33 @@ class Dataset:
             pot_err_grps.append(groups[i]) 
         self.outliers_flagged[name] = pot_err_grps
 
-        ax = visualize_outliers(col, ax, pot_err_grps, color='red')
+        if(pot_err_grps):
+            ax = visualize_outliers(col, ax, pot_err_grps, color='red')
+    
+    def show_univariate_outliers(self,col):
+        col, name = self.__check_col(col)
+        if(not name):
+            return
+        
+        outliers = zscore_method(col)
+        groups = group_outliers(outliers)
+
+        ax = col.plot()
+        ax = visualize_outliers(col, ax, groups, color='green')
+        
+        means = []
+        for i in range(len(groups)):
+            subseries = col.iloc[groups[i][0]-1:groups[i][-1]]
+            means.append(subseries.mean())
+        
+        pot_err = zscore_method(means,1)
+        pot_err_grps = []
+        for i in pot_err:
+            pot_err_grps.append(groups[i]) 
+        self.outliers_flagged[name] = pot_err_grps
+
+        if(pot_err_grps):
+            ax = visualize_outliers(col, ax, pot_err_grps, color='red')
 
     def clean_flagged_outliers(self, col, manual = []):
         col, name = self.__check_col(col)
@@ -265,9 +293,15 @@ class Dataset:
         for i in range(len(flagged_groups)):
             group = flagged_groups[i]
             for n in range(len(group)):
-                self.df[name].iloc[n] = float('NaN')
+                self.df[name].iloc[group[n]] = float('NaN')
+                #print('Changed {0}'.format(group[n]))
 
-        self.interpolate()
+        #self.df.fillna(0.2,inplace=True)
+        self.interpolate(method='time')
+
+        ax = self.df[name].plot()
+        ax = visualize_outliers(self.df[name], ax, self.outliers[name], color='green')
+        ax = visualize_outliers(self.df[name], ax, self.outliers_flagged[name], color='green')
 
 
     def __check_col(self, col):

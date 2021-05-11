@@ -95,6 +95,18 @@ def group_outliers(out):
 
     return cons
 
+def extend_outliers(groups, threshold=3):
+    for i in range(len(groups)):
+        group = groups[i]
+        #print(group)
+        for n in range(threshold):
+            if(group[0]>1):
+                group.insert(0,group[0]-1)
+                group.append(group[-1]+1)
+        groups[i] = group
+        #print(group)
+    return groups
+
 def visualize_outliers(col, ax, out_groups, color='red'):
     for i in range(len(out_groups)):
         col.iloc[out_groups[i][0]-1:out_groups[i][-1]].plot(ax=ax, color=color)
