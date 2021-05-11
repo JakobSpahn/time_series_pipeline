@@ -2,9 +2,10 @@
 KEEN Challenge Source Code for Time Series Data Pipeline
 ## Framework for pre-processing data. Ideal for jupyter notebook
 ## Installation  
-Run: ```python setup.py develop```  
+- Run: ```python setup.py develop```  
 
-## Pfad zu den Examples, Erklären, dass die notebooks die lösung enthalten
+## Usage and [Examples](/examples):
+- /examples
 ## Vorgehen outlier detection. Nach welchen Regeln funktioniert flagging?
 
 
