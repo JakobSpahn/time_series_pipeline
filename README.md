@@ -23,5 +23,5 @@ Each data processing step is detailed in these notebooks.
 - partial_noise: 	    succesfully processes but does not reduce any noise
 - single_timeshifts:	pipeline can't handle multiple files. They would have to be processed sequentially
 ### Other issues:
-- framework only accepts '''.csv''' data
+- framework only accepts ```.csv``` data
 
