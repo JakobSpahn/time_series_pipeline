@@ -20,15 +20,23 @@ If gaps of missing values exceed a pre-defined limit, they will be skipped.
 - This is one of the most sensitive parts of pre-processing. Some outliers may be measurement errors, while others may be natural anomalies.  
 
 
-Thus, our solution is semi-automatic: outliers that may be measurement errors (or NaN-values e.g. '9999') are only flagged. 
+Thus, our solution is semi-automatic: outliers that may be measurement errors (or NaN-values e.g. '9999') are only flagged.   
 The user then decides whether the flagged outliers should be cleaned.  
 Following this, the user will have to look at each column individually.  
 
-Outliers are detected depending on the column:  
+#### Outliers are detected depending on the column:  
 If a column has high correlation (>0.7) with other columns, it will use multivariate outlier detection using those other columns.  
 For this, the mahalanobis-distance is computed for each of the data points.  
 
-If 
+If a column has no high correlation with other columns, a univariate outlier detection method is chosen.  
+For this, the absolute z-score for each data point in the column is computed.  
+The values with a threshold above 3 are then marked as outliers.
+
+#### Some of the detected outliers are then flagged:
+First, consecutive outliers are grouped, forming outlier-ranges.
+For each range, the mean is computed. This results in a list containing the mean of each outlier-range.  
+The absolute z-score for this list is then calculated and elements with a threshold above ```>1``` are flagged.
+
 
 ## Issues and Limitations
 ### Issues with datasets from the /data/example/ category:
