@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 from dateutil import parser
 
 from .utils import get_header
+from .outlier import *
 
 from datetime import datetime, timedelta
+from statistics import mean
 from math import isnan
 
 class Dataset:
@@ -19,6 +21,8 @@ class Dataset:
         self.sampling_rate = None
         self.average = None
         self.std_dev = None
+        self.outliers = {}
+        self.outliers_flagged = {}
 
         if(unit):
             tmp = self.df.iloc[0].values
@@ -173,6 +177,8 @@ class Dataset:
     
     def interpolate(self):
         #ToDo: Add limit
+        na_rows = len(self.df[self.df.isnull().any(axis=1)])
+        print('Befor interpolation {0} rows contain nan values'.format(na_rows))
         self.df = self.df.interpolate(method='time').ffill().bfill()
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('After interpolation {0} rows contain nan values'.format(na_rows))
@@ -196,6 +202,88 @@ class Dataset:
             del self.units[redundant[i]]
             print('Column: \'{0}\' was dropped'.format(redundant[i]))
         
+    def show_multivariate_outliers(self,col):
+        col, name = self.__check_col(col)
+        if(not name):
+            return
+        
+        try:
+            corr = high_correlators(self.df, 0.7)[name]
+        except KeyError:
+            print('Column does not correlate enough with other columns to detect multivariate outliers')
+            return
+        
+        lst = [name]
+        lst.extend(corr)
+        df = self.df[lst] #Get Dataframe with only this column and the correlating columns
+        
+        outliers_mahal, md = mahalanobis_method(df=df)
+        groups = group_outliers(outliers_mahal)
+        self.outliers[name] = groups
+
+        ax = col.plot()
+        ax = visualize_outliers(col, ax, groups, color='green')
+
+        means = []
+        for i in range(len(groups)):
+            subseries = col.iloc[groups[i][0]-1:groups[i][-1]]
+            means.append(subseries.mean())
+        
+        pot_err = zscore_method(means,1)
+        pot_err_grps = []
+        for i in pot_err:
+            pot_err_grps.append(groups[i]) 
+        self.outliers_flagged[name] = pot_err_grps
+
+        ax = visualize_outliers(col, ax, pot_err_grps, color='red')
+
+    def clean_flagged_outliers(self, col, manual = []):
+        col, name = self.__check_col(col)
+        if(not name):
+            return
+    
+        if(manual and isinstance(manual, list)):
+            print('Cleaning the manually flagged outliers: {0}'.format(manual))
+            flagged_groups = []
+            try:
+                groups = self.outliers[name]
+            except KeyError:
+                print('No outliers known for this column. Consider running {0} first'.format(self.show_multivariate_outliers))
+                return
+                
+            for i in manual:
+                flagged_groups.append(group[i])           
+
+        elif(not manual):
+            try:
+                flagged_groups = self.outliers_flagged[name]
+                print('Cleaning the automatically flagged outliers')
+            except KeyError:
+                print('Column does not have any outliers atomatically flagged. Consider running {0} first'.format(self.show_multivariate_outliers))
+                return
+
+        for i in range(len(flagged_groups)):
+            group = flagged_groups[i]
+            for n in range(len(group)):
+                self.df[name].iloc[n] = float('NaN')
+
+        self.interpolate()
+
+
+    def __check_col(self, col):
+        if(isinstance(col, str)):
+            name = col
+            col = self.df[name]
+        elif(isinstance(col, pd.core.series.Series)):
+            name = col.name
+        else:
+            print('Column not in dataframe')
+            return False, False
+        return col, name
+
+
+
 
     def to_csv(self, location, index=False):
         self.df.to_csv(location,index=index)
+
