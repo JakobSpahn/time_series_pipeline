@@ -178,7 +178,7 @@ class Dataset:
     def interpolate(self, method='time'):
         #ToDo: Add limit
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
-        print('Befor interpolation {0} rows contain nan values'.format(na_rows))
+        print('Before interpolation {0} rows contain nan values'.format(na_rows))
         self.df = self.df.interpolate(method=method).ffill().bfill()
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('After interpolation {0} rows contain nan values'.format(na_rows))

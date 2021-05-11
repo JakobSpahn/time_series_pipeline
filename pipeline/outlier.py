@@ -109,5 +109,5 @@ def extend_outliers(groups, threshold=3):
 
 def visualize_outliers(col, ax, out_groups, color='red'):
     for i in range(len(out_groups)):
-        col.iloc[out_groups[i][0]-1:out_groups[i][-1]].plot(ax=ax, color=color)
+            col.iloc[out_groups[i][0]-1:out_groups[i][-1]].plot(ax=ax, color=color)
     return ax
