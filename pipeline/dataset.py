@@ -82,13 +82,14 @@ class Dataset:
             time_format =  '%Y-%m-%d ' + base_format
 
         self.time_format = time_format
-        return time_format
+        print('Chosen format: {0}'.format(time_format))
 
     def apply_format(self):
         next_idx = 0
         group = 0
 
         arr = self.df[self.name_time].to_numpy()
+        counter = 0
         
         for i in range(len(arr)):
             val = arr[i]
@@ -102,6 +103,7 @@ class Dataset:
                 #If its already NaT
                 
             except ValueError:
+                counter += 1
                 if next_idx == i:
                     next_idx = i+1
                 else:
@@ -112,7 +114,8 @@ class Dataset:
                 
             arr[i] = val
 
-        self.df[self.name_time]=arr            
+        self.df[self.name_time]=arr  
+        print('{0} timestamps could not be parsed and will be inferred later on'.format(counter))          
         #return self.df
 
     def clean_stamps(self):
@@ -121,15 +124,13 @@ class Dataset:
         self.df = self.df.drop_duplicates()
         self.df.reset_index(drop=True, inplace=True)
         
-        
-        
         #Get List of all duplicated indices
         df_i_dup = self.df[self.df.duplicated(subset=[self.name_time],keep=False)]
         unique_dup = df_i_dup[self.name_time].unique() #[11:01:00, 0x0, 0x1]
-        print(unique_dup)
+        print('Recurring timestamps that need to be cleaned: {0}'.format(unique_dup))
 
         for idx,i in enumerate(unique_dup):
-            print('Changing duplicate timestamp {0}'.format(i))
+            print('Changing duplicate timestamps {0}'.format(i))
             
             tmp_df_i_dup = df_i_dup.loc[df_i_dup[self.name_time] == unique_dup[idx]] #Get list of specific duplicated indices
             
@@ -178,7 +179,7 @@ class Dataset:
         median = None
         if(self.time_as_index()):
             values = self.df.index.to_series().diff()
-            print(values.value_counts())
+            print('Sampling rates in the dataset: \n{0}'.format(values.value_counts()))
             median = values.median()
             print('Median: {0}'.format(median))
         
@@ -211,13 +212,16 @@ class Dataset:
                 self.df[cols[i]] = pd.to_numeric(self.df[cols[i]], errors='coerce')
                 print('Converted column: \'{0}\' to numeric'.format(cols[i]))
     
-    def interpolate(self, method='time'):
-        #ToDo: Add limit
+    def interpolate(self, method='time', limit=0.2):
+        limit = int(len(self.df)*0.2)
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('Before interpolation {0} rows contain nan values'.format(na_rows))
-        self.df = self.df.interpolate(method=method).ffill().bfill()
+        self.df = self.df.interpolate(method=method, limit=limit).ffill().bfill()
         na_rows = len(self.df[self.df.isnull().any(axis=1)])
         print('After interpolation {0} rows contain nan values'.format(na_rows))
+        if(na_rows>0):
+            print('These rows might not have been filled due to exceeding the limit\n \
+                Consider dropping these columns') 
 
     def drop_dup_cols(self):
         redundant = []
@@ -237,8 +241,23 @@ class Dataset:
             self.df.drop(columns = redundant[i], inplace=True)
             del self.units[redundant[i]]
             print('Column: \'{0}\' was dropped'.format(redundant[i]))
+    
+    def flag_outliers(self,col, dct):
+        col, name = self.__check_col(col)
+        if(not name):
+            return
         
-    def show_multivariate_outliers(self,col):
+        try:
+            dct[name]
+            print('Flag outliers using multivariate outlier detection (this column correlates with other columns)')
+            print('Detected outliers are marked with red and green.\nGreen: outliers not marked for cleaning\nRed: outliers marked for cleaning')
+            self.flag_multivariate_outliers(col)
+        except KeyError:
+            print('Flag outliers using univariate outliers')
+            print('Detected outliers are marked with red and green.\nGreen: outliers not marked for cleaning\nRed: outliers marked for cleaning')
+            self.flag_univariate_outliers(col)
+
+    def flag_multivariate_outliers(self,col):
         col, name = self.__check_col(col)
         if(not name):
             return
@@ -255,6 +274,9 @@ class Dataset:
         
         #Only caculate outliers if not already available
         outliers_mahal, md = mahalanobis_method(df=df)
+        if(not outliers_mahal):
+            print('No outliers found')
+            return
         groups = group_outliers(outliers_mahal)
         #groups = extend_outliers(groups)
         self.outliers[name] = groups
@@ -276,12 +298,15 @@ class Dataset:
         if(pot_err_grps):
             ax = visualize_outliers(col, ax, pot_err_grps, color='red')
     
-    def show_univariate_outliers(self,col):
+    def flag_univariate_outliers(self,col):
         col, name = self.__check_col(col)
         if(not name):
             return
         
         outliers = zscore_method(col)
+        if(not outliers.any()):
+            print('No outliers found')
+            return
         groups = group_outliers(outliers)
         self.outliers[name] = groups
 
@@ -346,7 +371,10 @@ class Dataset:
         ax = self.df[name].plot()
         ax = visualize_outliers(self.df[name], ax, self.outliers[name], color='green')
         ax = visualize_outliers(self.df[name], ax, self.outliers_flagged[name], color='green')
-
+    
+    def print_cols(self):
+        for i in range(len(self.df.columns)):
+            print('{0}: {1}'.format(i, self.df.columns[i]))
 
     def __check_col(self, col):
         if(isinstance(col, str)):
@@ -360,4 +388,6 @@ class Dataset:
         return col, name
 
     def to_csv(self, location, index=False):
+        #2. apply time format to index
+        self.df.index = self.df.index.strftime(self.time_format)
         self.df.to_csv(location,index=index)
