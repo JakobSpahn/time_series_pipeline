@@ -1,22 +1,27 @@
 # time_series_pipeline
-KEEN Challenge Source Code for Time Series Data Pipeline
-## Framework for pre-processing data. Ideal for jupyter notebook
+Framework for pre-processing time series data. Ideal for usage in Ipython-notebooks.
+Source-Code for the KEEN Hackathon Challenge: 'AI-Based Automation of Industrial Data Pre-Processing' 
+ 
 ## Installation  
 - Run: ```python setup.py develop```  
 
 ## Usage and [Examples](/examples):
-- /examples
-## Vorgehen outlier detection. Nach welchen Regeln funktioniert flagging?
+For each of the two cleaned examples, there are Ipython-notebooks detailing the steps that have been run through to process the examples.  
+Each data processing step is detailed in these notebooks.  
+- example_1.csv: this example stems from /data/real/00-complete/dirty_data.csv
+- example_2.csv: this example stems from /data/real/01-dirty-baseline/data-000.csv 
 
+## Strategies
+### Filling Missing Values
+### Outlier Detection
 
-## Welche Besipiele haben funktioniert und welche nicht?
---> conv_unit:		processing but ignores units
---> formats: 		can only process matrix-format (not list)
---> lagging: 		can process without error, but cannot infer lagging value from second column
---> na_base: 		succesfully processes and replaces nan 
---> na_flag: 		succesfully processes and replaces nan
---> na_replacement: 	succesfully processes using outlier detection (semi-automatic, requires user input)
---> partial_noise: 	succesfully processes but does not reduce any noise
---> single_timeshifts:	pipeline can't handle multiple files. They would have to be processed sequentially
+## Issues and Limitations
+### Issues with datasets from the /data/example/ category:
+- conv_unit:		      processing but ignores units
+- formats: 		        can only process matrix-format (not list)
+- lagging: 		        can process without error, but cannot infer lagging value from second column
+- partial_noise: 	    succesfully processes but does not reduce any noise
+- single_timeshifts:	pipeline can't handle multiple files. They would have to be processed sequentially
+### Other issues:
+- framework only accepts '''.csv''' data
 
-## Andere Limitations?
